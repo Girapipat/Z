@@ -1,0 +1,21 @@
+"# miracle" 
+"# miracle" 
+"# miracle" 
+"# miracle" 
+"# miracle" 
+"# miracle" 
+"# fateone" 
+"# fateone" 
+"# sekai" 
+"# sekai" 
+"# MCqueen" 
+"# eledma" 
+"# omega" 
+"# GOGETA" 
+"# GOGETA" 
+"# GOGETA" 
+<<<<<<< HEAD
+"# GOGETA" 
+=======
+>>>>>>> 1f33fdcf67b627859f161398c7246c4123245ded
+"# Z" 
