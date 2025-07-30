@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+*.h5
+*.tflite
+venv/
+uploads/
+static/uploads/
+"venv/" 
