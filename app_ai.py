@@ -8,8 +8,8 @@ from PIL import Image
 app = Flask(__name__)
 
 # Load models
-model_class = tf.keras.models.load_model("classifier_model.h5")
-model_reg = tf.keras.models.load_model("regression_model.h5", compile=False)
+model_class = tf.keras.models.load_model("classifier_model.tflite")
+model_reg = tf.keras.models.load_model("regression_model.tflite", compile=False)
 
 IMG_SIZE = (224, 224)
 
