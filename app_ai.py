@@ -1,25 +1,30 @@
-### ✅ app_ai.py
-
 from flask import Flask, render_template, request, jsonify
 import tensorflow as tf
 import numpy as np
 from PIL import Image
 
 app = Flask(__name__)
-
-# Load models
-model_class = tf.keras.models.load_model("classifier_model.tflite")
-model_reg = tf.keras.models.load_model("regression_model.tflite", compile=False)
-
 IMG_SIZE = (224, 224)
 
-# Prepare image
+def load_tflite_model(path):
+    interpreter = tf.lite.Interpreter(model_path=path)
+    interpreter.allocate_tensors()
+    return interpreter
+
+# Load TFLite models
+model_class = load_tflite_model("classifier_model.tflite")
+model_reg = load_tflite_model("regression_model.tflite")
+
+input_class = model_class.get_input_details()
+output_class = model_class.get_output_details()
+input_reg = model_reg.get_input_details()
+output_reg = model_reg.get_output_details()
 
 def prepare_image(image_file):
     img = Image.open(image_file).convert("RGB")
     img = img.resize(IMG_SIZE)
     img_array = np.array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
+    img_array = np.expand_dims(img_array, axis=0).astype(np.float32)
     return img_array
 
 @app.route("/")
@@ -38,14 +43,18 @@ def upload():
     img = prepare_image(file)
 
     # STEP 1: Classification
-    pred_prob = model_class.predict(img)[0][0]
+    model_class.set_tensor(input_class[0]['index'], img)
+    model_class.invoke()
+    pred_prob = model_class.get_tensor(output_class[0]['index'])[0][0]
     threshold = 0.5
 
     if pred_prob < threshold:
         return jsonify({"is_solution": False, "confidence": float(pred_prob)})
 
     # STEP 2: Regression
-    pred_value = model_reg.predict(img)[0][0]
+    model_reg.set_tensor(input_reg[0]['index'], img)
+    model_reg.invoke()
+    pred_value = model_reg.get_tensor(output_reg[0]['index'])[0][0]
     intensity = int(pred_value * 255)
 
     return jsonify({
