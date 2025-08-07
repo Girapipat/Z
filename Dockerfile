@@ -1,20 +1,16 @@
+# ใช้ base image ของ Python
 FROM python:3.10-slim
 
+# ตั้ง working directory
 WORKDIR /app
 
-# Install required system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libgl1 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies
+# คัดลอกไฟล์
 COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN pip install --upgrade pip
+RUN pip install -r requirements.txt
 
-# Copy training script and dataset
-COPY train_classifier.py .
-COPY dataset ./dataset
+# คัดลอกทุกไฟล์ไปไว้ใน container
+COPY . .
 
-# Run training script
-CMD ["python", "train_classifier.py"]
+# รัน Flask app
+CMD ["python", "app_ai.py"]
