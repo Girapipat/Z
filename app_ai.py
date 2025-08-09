@@ -1,97 +1,65 @@
 import os
 import numpy as np
-import tensorflow as tf
-from flask import Flask, request, jsonify
+from flask import Flask, request, render_template
 from PIL import Image
+import tensorflow as tf
 
 app = Flask(__name__)
 
-# ---------------------------
-# ฟังก์ชันโหลดโมเดล TFLite
-# ---------------------------
-def load_tflite_model(model_path):
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"ไม่พบโมเดล: {model_path}")
-    interpreter = tf.lite.Interpreter(model_path=model_path)
+# โหลดโมเดล TFLite
+def load_tflite_model(path):
+    interpreter = tf.lite.Interpreter(model_path=path)
     interpreter.allocate_tensors()
-    return interpreter
-
-# ---------------------------
-# โหลดโมเดลทั้งสอง
-# ---------------------------
-classifier_interpreter = load_tflite_model("models/classifier_model.tflite")
-regression_interpreter = load_tflite_model("models/regression_model.tflite")
-
-# ---------------------------
-# ฟังก์ชันรันโมเดล TFLite
-# ---------------------------
-def run_tflite_model(interpreter, input_data):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
+    return interpreter, input_details, output_details
 
-    # แปลง input ให้ตรง type
-    input_data = input_data.astype(input_details[0]['dtype'])
-    interpreter.set_tensor(input_details[0]['index'], input_data)
-    interpreter.invoke()
+# โหลดทั้ง 2 โมเดล
+cls_interpreter, cls_input_details, cls_output_details = load_tflite_model("classifier_model.tflite")
+reg_interpreter, reg_input_details, reg_output_details = load_tflite_model("regression_model.tflite")
 
-    output_data = interpreter.get_tensor(output_details[0]['index'])
-    return output_data
+# ฟังก์ชันประมวลผลภาพให้เหมาะกับ MobileNetV2
+def preprocess_image(image):
+    image = image.resize((224, 224))
+    image = image.convert("RGB")
+    image = np.array(image).astype(np.float32) / 255.0
+    image = np.expand_dims(image, axis=0)
+    return image
 
-# ---------------------------
-# เตรียมภาพก่อนส่งเข้าโมเดล
-# ---------------------------
-def preprocess_image(image, target_size=(224, 224)):
-    img = image.convert("RGB").resize(target_size)
-    img_array = np.array(img, dtype=np.float32) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)  # (1, H, W, 3)
-    return img_array
+# ฟังก์ชันทำนายว่าเป็นสารละลายหรือไม่
+def is_solution(image_array):
+    cls_interpreter.set_tensor(cls_input_details[0]['index'], image_array)
+    cls_interpreter.invoke()
+    output_data = cls_interpreter.get_tensor(cls_output_details[0]['index'])
+    result = np.argmax(output_data)
+    return result == 1  # 1 คือ solution, 0 คือ not_solution
 
-# ---------------------------
-# API อัปโหลดภาพและวิเคราะห์
-# ---------------------------
-@app.route("/upload", methods=["POST"])
-def upload():
-    if "file" not in request.files:
-        return jsonify({"error": "กรุณาอัปโหลดไฟล์ภาพ"}), 400
+# ฟังก์ชันทำนายค่าความเข้มข้น (เฉพาะถ้าเป็นสารละลาย)
+def predict_intensity(image_array):
+    reg_interpreter.set_tensor(reg_input_details[0]['index'], image_array)
+    reg_interpreter.invoke()
+    output_data = reg_interpreter.get_tensor(reg_output_details[0]['index'])
+    value = output_data[0][0]  # ค่าอยู่ในช่วง 0.0–0.9
+    intensity = int(value * 255)  # แปลงเป็น 0–255
+    return intensity
 
-    file = request.files["file"]
-    try:
-        image = Image.open(file.stream)
-    except Exception:
-        return jsonify({"error": "ไฟล์ที่อัปโหลดไม่ใช่ภาพ"}), 400
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    prediction = ""
+    if request.method == 'POST':
+        file = request.files['image']
+        if file:
+            image = Image.open(file.stream)
+            img_array = preprocess_image(image)
 
-    # เตรียม input
-    input_data = preprocess_image(image)
+            if is_solution(img_array):
+                intensity = predict_intensity(img_array)
+                prediction = f"เป็นสารละลาย ความเข้มข้น: {intensity}"
+            else:
+                prediction = "ไม่ใช่สารละลาย"
 
-    # --------------------
-    # 1) Predict Classifier
-    # --------------------
-    class_output = run_tflite_model(classifier_interpreter, input_data)
-    # สมมติว่า output = [[probability_of_solution]]
-    is_solution_prob = float(class_output[0][0])
-    is_solution = is_solution_prob >= 0.5
+    return render_template('index.html', prediction=prediction)
 
-    if not is_solution:
-        return jsonify({
-            "is_solution": False,
-            "confidence": is_solution_prob
-        })
-
-    # --------------------
-    # 2) Predict Regression
-    # --------------------
-    reg_output = run_tflite_model(regression_interpreter, input_data)
-    intensity_value = float(reg_output[0][0])  # ค่าความเข้ม
-
-    return jsonify({
-        "is_solution": True,
-        "confidence": is_solution_prob,
-        "intensity": intensity_value
-    })
-
-# ---------------------------
-# Run Flask App
-# ---------------------------
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 10000))  # Render จะส่ง PORT เข้ามา
+    app.run(host='0.0.0.0', port=port)
