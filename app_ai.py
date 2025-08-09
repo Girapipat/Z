@@ -20,9 +20,15 @@ output_details_reg = interpreter_reg.get_output_details()
 
 # ---------------------------
 # ฟังก์ชันประมวลผลภาพก่อนส่งเข้าโมเดล
+# ปรับให้รับได้ทั้ง path หรือ PIL.Image object
 # ---------------------------
-def preprocess_image(image_path, target_size):
-    img = Image.open(image_path).convert("RGB")
+def preprocess_image(image, target_size):
+    if isinstance(image, str):
+        # กรณีรับเป็น path
+        img = Image.open(image).convert("RGB")
+    else:
+        # กรณีรับเป็น PIL.Image
+        img = image.convert("RGB")
     img = img.resize(target_size)
     img_array = np.array(img, dtype=np.float32) / 255.0
     img_array = np.expand_dims(img_array, axis=0)  # shape: (1, h, w, 3)
@@ -32,8 +38,8 @@ def preprocess_image(image_path, target_size):
 # ---------------------------
 # ฟังก์ชันทำนายด้วย classifier
 # ---------------------------
-def predict_classifier(image_path):
-    img_array = preprocess_image(image_path, (224, 224))
+def predict_classifier(image):
+    img_array = preprocess_image(image, (224, 224))
     interpreter_cls.set_tensor(input_details_cls[0]['index'], img_array)
     interpreter_cls.invoke()
     pred = interpreter_cls.get_tensor(output_details_cls[0]['index'])[0][0]
@@ -44,8 +50,8 @@ def predict_classifier(image_path):
 # ---------------------------
 # ฟังก์ชันทำนายด้วย regression
 # ---------------------------
-def predict_regression(image_path):
-    img_array = preprocess_image(image_path, (224, 224))
+def predict_regression(image):
+    img_array = preprocess_image(image, (224, 224))
     interpreter_reg.set_tensor(input_details_reg[0]['index'], img_array)
     interpreter_reg.invoke()
     pred = interpreter_reg.get_tensor(output_details_reg[0]['index'])[0][0]
@@ -53,13 +59,12 @@ def predict_regression(image_path):
 
 
 # ---------------------------
-# ตัวอย่างการใช้งาน
+# ตัวอย่างการใช้งาน (ทดสอบจากไฟล์จริง)
 # ---------------------------
 if __name__ == "__main__":
-    test_image = "test.jpg"  # เปลี่ยนเป็น path ของภาพที่จะทดสอบ
-
-    label, score = predict_classifier(test_image)
+    test_image_path = "test.jpg"  # หรือเปลี่ยนเป็น path อื่นที่มีอยู่จริง
+    label, score = predict_classifier(test_image_path)
     print(f"Classifier: {label} (score={score:.4f})")
 
-    intensity = predict_regression(test_image)
+    intensity = predict_regression(test_image_path)
     print(f"Regression intensity: {intensity:.4f}")
