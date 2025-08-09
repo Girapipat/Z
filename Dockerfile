@@ -1,33 +1,25 @@
-# Base image
+# ใช้ Python เวอร์ชันที่ Render รองรับ
 FROM python:3.10-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PORT=10000
+# ตั้งค่าให้ Python แสดง log แบบไม่ buffer
+ENV PYTHONUNBUFFERED=1
 
-# Create working directory
+# สร้างโฟลเดอร์ app
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies
+# ติดตั้ง dependencies
 COPY requirements.txt .
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copy app code
+# คัดลอกโค้ดทั้งหมดไปใน container
 COPY . .
 
-# Expose the port your app runs on
-EXPOSE 10000
+# Port สำหรับ web server
+EXPOSE 8000
 
-# Run the web app
-CMD ["gunicorn", "-b", "0.0.0.0:10000", "app_ai:app"]
+# คำสั่งรันแอป (แก้ตาม framework ของคุณ)
+# ถ้าใช้ Flask:
+# CMD ["python", "app_ai.py"]
+
+# ถ้าใช้ FastAPI + Uvicorn:
+CMD ["uvicorn", "app_ai:app", "--host", "0.0.0.0", "--port", "8000"]

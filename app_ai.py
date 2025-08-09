@@ -1,65 +1,65 @@
-import os
-import numpy as np
-from flask import Flask, request, render_template
-from PIL import Image
 import tensorflow as tf
+import numpy as np
+from PIL import Image
 
-app = Flask(__name__)
+# ---------------------------
+# โหลด .tflite ทั้ง 2 โมเดล
+# ---------------------------
+# Classifier
+interpreter_cls = tf.lite.Interpreter(model_path="classifier_model.tflite")
+interpreter_cls.allocate_tensors()
+input_details_cls = interpreter_cls.get_input_details()
+output_details_cls = interpreter_cls.get_output_details()
 
-# โหลดโมเดล TFLite
-def load_tflite_model(path):
-    interpreter = tf.lite.Interpreter(model_path=path)
-    interpreter.allocate_tensors()
-    input_details = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
-    return interpreter, input_details, output_details
+# Regression
+interpreter_reg = tf.lite.Interpreter(model_path="regression_model.tflite")
+interpreter_reg.allocate_tensors()
+input_details_reg = interpreter_reg.get_input_details()
+output_details_reg = interpreter_reg.get_output_details()
 
-# โหลดทั้ง 2 โมเดล
-cls_interpreter, cls_input_details, cls_output_details = load_tflite_model("classifier_model.tflite")
-reg_interpreter, reg_input_details, reg_output_details = load_tflite_model("regression_model.tflite")
 
-# ฟังก์ชันประมวลผลภาพให้เหมาะกับ MobileNetV2
-def preprocess_image(image):
-    image = image.resize((224, 224))
-    image = image.convert("RGB")
-    image = np.array(image).astype(np.float32) / 255.0
-    image = np.expand_dims(image, axis=0)
-    return image
+# ---------------------------
+# ฟังก์ชันประมวลผลภาพก่อนส่งเข้าโมเดล
+# ---------------------------
+def preprocess_image(image_path, target_size):
+    img = Image.open(image_path).convert("RGB")
+    img = img.resize(target_size)
+    img_array = np.array(img, dtype=np.float32) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)  # shape: (1, h, w, 3)
+    return img_array
 
-# ฟังก์ชันทำนายว่าเป็นสารละลายหรือไม่
-def is_solution(image_array):
-    cls_interpreter.set_tensor(cls_input_details[0]['index'], image_array)
-    cls_interpreter.invoke()
-    output_data = cls_interpreter.get_tensor(cls_output_details[0]['index'])
-    result = np.argmax(output_data)
-    return result == 1  # 1 คือ solution, 0 คือ not_solution
 
-# ฟังก์ชันทำนายค่าความเข้มข้น (เฉพาะถ้าเป็นสารละลาย)
-def predict_intensity(image_array):
-    reg_interpreter.set_tensor(reg_input_details[0]['index'], image_array)
-    reg_interpreter.invoke()
-    output_data = reg_interpreter.get_tensor(reg_output_details[0]['index'])
-    value = output_data[0][0]  # ค่าอยู่ในช่วง 0.0–0.9
-    intensity = int(value * 255)  # แปลงเป็น 0–255
-    return intensity
+# ---------------------------
+# ฟังก์ชันทำนายด้วย classifier
+# ---------------------------
+def predict_classifier(image_path):
+    img_array = preprocess_image(image_path, (224, 224))
+    interpreter_cls.set_tensor(input_details_cls[0]['index'], img_array)
+    interpreter_cls.invoke()
+    pred = interpreter_cls.get_tensor(output_details_cls[0]['index'])[0][0]
+    label = "solution" if pred >= 0.5 else "not_solution"
+    return label, float(pred)
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    prediction = ""
-    if request.method == 'POST':
-        file = request.files['image']
-        if file:
-            image = Image.open(file.stream)
-            img_array = preprocess_image(image)
 
-            if is_solution(img_array):
-                intensity = predict_intensity(img_array)
-                prediction = f"เป็นสารละลาย ความเข้มข้น: {intensity}"
-            else:
-                prediction = "ไม่ใช่สารละลาย"
+# ---------------------------
+# ฟังก์ชันทำนายด้วย regression
+# ---------------------------
+def predict_regression(image_path):
+    img_array = preprocess_image(image_path, (224, 224))
+    interpreter_reg.set_tensor(input_details_reg[0]['index'], img_array)
+    interpreter_reg.invoke()
+    pred = interpreter_reg.get_tensor(output_details_reg[0]['index'])[0][0]
+    return float(pred)  # ค่าระหว่าง 0.0 - 1.0
 
-    return render_template('index.html', prediction=prediction)
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 10000))  # Render จะส่ง PORT เข้ามา
-    app.run(host='0.0.0.0', port=port)
+# ---------------------------
+# ตัวอย่างการใช้งาน
+# ---------------------------
+if __name__ == "__main__":
+    test_image = "test.jpg"  # เปลี่ยนเป็น path ของภาพที่จะทดสอบ
+
+    label, score = predict_classifier(test_image)
+    print(f"Classifier: {label} (score={score:.4f})")
+
+    intensity = predict_regression(test_image)
+    print(f"Regression intensity: {intensity:.4f}")
