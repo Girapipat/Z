@@ -1,6 +1,9 @@
 import tensorflow as tf
 import numpy as np
 from PIL import Image
+from flask import Flask, request, render_template
+
+app = Flask(__name__)
 
 # ---------------------------
 # โหลด .tflite ทั้ง 2 โมเดล
@@ -59,12 +62,38 @@ def predict_regression(image):
 
 
 # ---------------------------
-# ตัวอย่างการใช้งาน (ทดสอบจากไฟล์จริง)
+# Flask route สำหรับรับไฟล์อัปโหลดและทำนายผล
 # ---------------------------
-if __name__ == "__main__":
-    test_image_path = "test.jpg"  # หรือเปลี่ยนเป็น path อื่นที่มีอยู่จริง
-    label, score = predict_classifier(test_image_path)
-    print(f"Classifier: {label} (score={score:.4f})")
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            return "No file uploaded", 400
+        file = request.files['file']
+        if file.filename == '':
+            return "No selected file", 400
+        img = Image.open(file.stream)
 
-    intensity = predict_regression(test_image_path)
-    print(f"Regression intensity: {intensity:.4f}")
+        label, score = predict_classifier(img)
+        intensity = predict_regression(img)
+
+        return f"Label: {label} (score={score:.4f}), Intensity: {intensity:.4f}"
+
+    # แสดงหน้า HTML form สำหรับอัปโหลดไฟล์ (ต้องมีไฟล์ index.html)
+    return render_template('index.html')
+
+
+# ---------------------------
+# ตัดส่วนนี้ออกเพราะบน Render ไม่มีไฟล์ test.jpg
+# ---------------------------
+# if __name__ == "__main__":
+#     test_image_path = "test.jpg"
+#     label, score = predict_classifier(test_image_path)
+#     print(f"Classifier: {label} (score={score:.4f})")
+#
+#     intensity = predict_regression(test_image_path)
+#     print(f"Regression intensity: {intensity:.4f}")
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
