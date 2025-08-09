@@ -1,25 +1,25 @@
-# ใช้ Python เวอร์ชันที่ Render รองรับ
-FROM python:3.10-slim
+# ใช้ Python 3.11 ที่ Render รองรับ และ TensorFlow ยังมี wheel
+FROM python:3.11-slim
 
-# ตั้งค่าให้ Python แสดง log แบบไม่ buffer
+# ป้องกันปัญหา interactive
 ENV PYTHONUNBUFFERED=1
 
-# สร้างโฟลเดอร์ app
-WORKDIR /app
+# ติดตั้งระบบพื้นฐานที่ TensorFlow ต้องใช้
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
 
-# ติดตั้ง dependencies
+# คัดลอกไฟล์ requirements.txt
 COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# คัดลอกโค้ดทั้งหมดไปใน container
+# อัปเกรด pip และติดตั้ง dependencies
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt
+
+# คัดลอกโค้ดทั้งหมด
 COPY . .
 
-# Port สำหรับ web server
-EXPOSE 8000
-
-# คำสั่งรันแอป (แก้ตาม framework ของคุณ)
-# ถ้าใช้ Flask:
-# CMD ["python", "app_ai.py"]
-
-# ถ้าใช้ FastAPI + Uvicorn:
-CMD ["uvicorn", "app_ai:app", "--host", "0.0.0.0", "--port", "8000"]
+# รันแอป (ถ้าใช้ Flask หรือ FastAPI ให้เปลี่ยนคำสั่งตามนั้น)
+CMD ["python", "app_ai.py"]

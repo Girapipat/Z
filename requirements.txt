@@ -1,4 +1,3 @@
-tensorflow-cpu==2.16.1
+tensorflow==2.20.0
+Pillow
 numpy
-pillow
-scikit-learn
